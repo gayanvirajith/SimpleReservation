@@ -1,3 +1,3 @@
 # Simple reservation module
 
-## Please note this module is on working progress.
+## Please note this module is on working progress
