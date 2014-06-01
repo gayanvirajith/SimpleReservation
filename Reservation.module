@@ -1,0 +1,60 @@
+<?php
+
+class Reservation extends WireData implements Module {
+
+    public static function getModuleInfo()
+    {
+        return array(
+            'title' => 'Reservation',
+            'version' => 003,
+            'summary' => 'Handles reservation process',
+            'singular' => false,
+            'autoload' => false,
+            'requires' => array(
+
+            )
+        );
+    }
+    /**
+     * Method to initialize the module.
+     *
+     * While the method is required, if you don't need it, then just leave the implementation blank.
+     *
+     * This is called after ProcessWire's API is fully ready for use and hooks. It is called at the end of the
+     * bootstrap process. This is before PW has started retrieving or rendering a page. If you need to have the
+     * API ready with the $page ready as well, then see the ready() method below this one.
+     *
+     */
+    public function init()
+    {
+        // TODO: Implement init() method.
+    }
+
+    public function renderReservation() {
+
+        if(!$this->input->urlSegment1) {
+            if ($this->input->post->res_first_name && $this->input->post->res_last_name){
+                echo "<h3>Thank you. We will contact you shortly.</h3>";
+            }else {
+                $out = $this->renderReservationForm();
+            }
+        }
+        return $out;
+    }
+
+    protected function renderReservationForm() {
+        $config = wire('config');
+        //Create delegate template
+        $template = new TemplateFile(__DIR__.  "/markup/reservation-form.inc");
+        $template->setArray(
+            array(
+                'hello' => 'Hello world'
+            )
+        );
+        //assign the rendered view to content variable to show up on _done.php
+        $content = $template->render();
+        return $content;
+    }
+
+
+}
