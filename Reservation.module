@@ -171,7 +171,6 @@ class Reservation extends WireData implements Module {
 
         return $out;
     }
-
     protected function renderReservationForm() {
         //Create delegate template
         $template = new TemplateFile(__DIR__.  "/markup/reservation-form.inc");

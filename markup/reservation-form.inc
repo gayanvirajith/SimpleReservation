@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <div class="order-form-details">
     <div class="panel panel-default">
 
@@ -141,3 +142,4 @@
         </div>
     </div>
 </div>
+
