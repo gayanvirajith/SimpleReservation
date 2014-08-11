@@ -1,7 +1,15 @@
 <?php
-
+/**
+ * Class Reservation
+ *
+ * Sample reservation module.
+ *
+ */
 class Reservation extends WireData implements Module {
 
+    //------------------------------------
+    // Modules information
+    // -----------------------------------
     public static function getModuleInfo()
     {
         return array(
@@ -10,11 +18,24 @@ class Reservation extends WireData implements Module {
             'summary' => 'Handles reservation process',
             'singular' => false,
             'autoload' => false,
-            'requires' => array(
-
-            )
+            'requires' => array()
         );
     }
+
+    /**
+     * Populate the default config data
+     *
+     * ProcessWire will automatically overwrite it with anything the user has specifically configured.
+     * This is done in construct() rather than init() because ProcessWire populates config data after
+     * construct(), but before init().
+     *
+     */
+    public function __construct() {
+        foreach(self::getDefaultData() as $key => $value) {
+            $this->$key = $value;
+        }
+    }
+
     /**
      * Method to initialize the module.
      *
@@ -30,25 +51,137 @@ class Reservation extends WireData implements Module {
         // TODO: Implement init() method.
     }
 
+    static public function getDefaultData() {
+
+
+        $defaultData = array(
+            'confirmationUrlSegment' => "confirmation",
+            'completedUrlSegment' 	=> "completed",
+            'customThankyou' => 0,
+            'noOfChildren' => array(),
+            'noOfAdults' => array()
+        );
+
+        foreach(self::getDefaultFields() as $key => $arr) {
+            if ($arr['defaults']['visible']) $defaultData[$key] = 1;
+            $reqKey = $key . 'Required';
+            if ($arr['defaults']['required']) $defaultData[$reqKey] = 1;
+
+            $defaultData['label'] = $arr['label'];
+        }
+
+        // ----------------------------------------
+        // Setting up labels for children drop-down
+        // ----------------------------------------
+        $maxChildren = 20;
+        for($i = 0; $i<=$maxChildren;$i++)
+        {
+            if ($i === 0) $defaultData['noOfChildren'][] = '0 ' . __('children');
+            else if ($i === 1) $defaultData['noOfChildren'][] = '1 ' . __('children');
+            else $defaultData['noOfChildren'][] = "{$i} " . __('children');
+        }
+
+        // ----------------------------------------
+        // Setting up labels for adult drop-down
+        // ----------------------------------------
+        $maxPeople = 20;
+        for($i = 1; $i<=$maxPeople;$i++)
+        {
+            if ($i === 1) $defaultData['noOfAdults'][$i] = '1 ' . __('person');
+            else $defaultData['noOfAdults'][$i] = "{$i} " . __('person');
+        }
+
+        return $defaultData;
+
+
+    }
+
+    static public function getDefaultFields() {
+
+        // ------------------------------
+        // Property for required input fields
+        // ------------------------------
+        $required = array(
+            'visible' => 1,
+            'required' => 1
+        );
+
+        // ------------------------------
+        // Properties for optional input fields
+        // ------------------------------
+        $visible = array(
+            'visible' => 1,
+            'required' => 0
+        );
+
+        // ------------------------------
+        // Properties for the hidden input fields
+        // ------------------------------
+        $hidden = array(
+            'visible' => 0,
+            'required' => 0
+        );
+
+        return array (
+            'res_first_name' => array('label' => __('First name'), 'defaults' => $required),
+            'res_last_name' => array('label' => __('Last name'), 'defaults' => $required),
+            'res_daytime_phone' => array('label' => __('Daytime phone'), 'defaults' => $required),
+            'res_email' => array('label' => __('Email'), 'defaults' => $required),
+            'res_arrival_date' => array('label' => __('Arrival date'), 'defaults' => $required),
+            'res_departure_date' => array('label' => __('Departure date'), 'defaults' => $required),
+            'res_no_of_adults' => array('label' => __('Number of adults'), 'defaults' => $required),
+            'res_no_of_children' => array('label' => __('Number of children'), 'defaults' => $required),
+            'res_comments' => array('label' => __('Comments'), 'defaults' => $visible),
+        );
+    }
+
     public function renderReservation() {
 
         if(!$this->input->urlSegment1) {
-            if ($this->input->post->res_first_name && $this->input->post->res_last_name){
-                echo "<h3>Thank you. We will contact you shortly.</h3>";
-            }else {
-                $out = $this->renderReservationForm();
+            if ($this->input->post->submit) {
+                $orderArray = $this->validateInformation(true);
+                if($orderArray['valid']) {
+                    $orderArray = $this->validateInformation(true);
+                    if($orderArray['valid']) {
+                        $this->session->redirect("./{$this->confirmationUrlSegment}/");
+                    }
+                }
+            }else if ($this->input->post->reset){
+                $this->resetFields();
+                $this->session->redirect("./");
+            } else {
+                $this->validateInformation(false);
+            }
+            $out = $this->renderReservationForm();
+
+        }
+        else if ($this->input->urlSegment1 == $this->confirmationUrlSegment) {
+            $out = $this->renderConfirmation();
+            if ($this->input->post->submit) {
+
+                $orderArray = $this->session->orderArray;
+                $this->sendEmail($orderArray);
+                $this->session->remove('orderArray');
+                $this->session->redirect("../{$this->completedUrlSegment}/");
             }
         }
+        else if ($this->input->urlSegment1 == $this->completedUrlSegment) {
+            $out = $this->renderReservationComplete();
+        }
+
         return $out;
     }
 
     protected function renderReservationForm() {
-        $config = wire('config');
         //Create delegate template
         $template = new TemplateFile(__DIR__.  "/markup/reservation-form.inc");
         $template->setArray(
             array(
-                'hello' => 'Hello world'
+                'title' => $this->_('Order your reservation'),
+                'summary' => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis tincidunt eleifend fringilla. Suspendisse pharetra justo mi, sit amet tincidunt odio porttitor et. Vestibulum posuere lacus a purus posuere molestie sit amet vel nulla',
+                'form' => $this->session->orderArray,
+                'noOfChildren' => $this->noOfChildren,
+                'noOfAdults' => $this->noOfAdults
             )
         );
         //assign the rendered view to content variable to show up on _done.php
@@ -56,5 +189,172 @@ class Reservation extends WireData implements Module {
         return $content;
     }
 
+    protected function renderConfirmation() {
+        //Create delegate template
+        $template = new TemplateFile(__DIR__.  "/markup/confirm-reservation-form.inc");
+        $template->setArray(
+            array(
+                'title' => $this->_('Confirm your details'),
+                'summary' => sprintf($this->_('Please confirm your details and click `%s` button to proceed. If you missed something please update your information by clicking `%s`.'), $this->_('Confirm'), $this->_('Edit order')),
+                'order' => $this->session->orderArray,
+            )
+        );
+        //assign the rendered view to content variable to show up on _done.php
+        $content = $template->render();
+        return $content;
+    }
 
+    protected function renderReservationComplete(){
+
+        $config = wire('config');
+
+        //Create delegate template
+        $template = new TemplateFile(__DIR__.  "/markup/reservation-complete.inc");
+        $template->setArray(
+            array(
+                'order' => $this->session->orderArray,
+                'title' => $this->_('Your reservation successful'),
+                'summary' => $this->_('Thank you for your order. We will contact you in soon.'),
+                'homepage' => $config->urls->root,
+            )
+        );
+        //assign the rendered view to content variable to show up on _done.php
+        $content = $template->render();
+        return $content;
+    }
+
+    public function resetFields() {
+
+        $fields = self::getDefaultFields();
+        $orderArray = Array();
+        $orderArray['valid'] = true;
+
+        foreach($fields as $key => $field) {
+
+            //--------------------------------------------
+            // If not visible field, don't add to array
+            //--------------------------------------------
+            // if ($this->$key != 1) continue;
+
+            //--------------------------------------------
+            // Set the form item type and default to input
+            //--------------------------------------------
+            if (isset($field['type'])) $orderArray['fields'][$key]['type'] = $field['type'];
+            else $orderArray['fields'][$key]['type'] = 'text';
+
+            //--------------------------------------------
+            // Set empty value for every field
+            //--------------------------------------------
+            $orderArray['fields'][$key]['value'] = '';
+
+            //--------------------------------------------
+            // Set default label for the field
+            //--------------------------------------------
+            if (isset($field['label'])) $orderArray['fields'][$key]['label'] = $field['label'];
+            else $orderArray['fields'][$key]['label'] = $this->_('No label added');
+
+
+            $orderArray['fields'][$key]['error'] = '';
+
+            //--------------------------------------------
+            // And if we have value saved on session, empty it
+            //--------------------------------------------
+            if(isset($this->session->orderArray['fields'][$key])) {
+                $orderArray['fields'][$key]['value'] = '';
+            }
+        }
+        $this->session->set('orderArray', $orderArray);
+
+    }
+
+    public function validateInformation($validate = true) {
+
+        $fields = self::getDefaultFields();
+        $orderArray = Array();
+        $orderArray['valid'] = true;
+
+        foreach($fields as $key => $field) {
+            //--------------------------------------------
+            // If not visible field, don't add to array
+            //--------------------------------------------
+            // if ($this->$key != 1) continue;
+
+            //--------------------------------------------
+            // Set the form item type and default to input
+            //--------------------------------------------
+            if (isset($field['type'])) $orderArray['fields'][$key]['type'] = $field['type'];
+            else $orderArray['fields'][$key]['type'] = 'text';
+
+            //--------------------------------------------
+            // Set empty value for every field
+            //--------------------------------------------
+            $orderArray['fields'][$key]['value'] = '';
+
+            //--------------------------------------------
+            // Set default label for the field
+            //--------------------------------------------
+            if (isset($field['label'])) $orderArray['fields'][$key]['label'] = $field['label'];
+            else $orderArray['fields'][$key]['label'] = $this->_('No label added');
+
+
+            $orderArray['fields'][$key]['error'] = '';
+
+            //--------------------------------------------
+            // And if we have value saved on session, update it
+            //--------------------------------------------
+            if(isset($this->session->orderArray['fields'][$key])) {
+                $orderArray['fields'][$key]['value'] = $this->session->orderArray['fields'][$key]['value'];
+            }
+        }
+
+
+        if ($validate) {
+            foreach($orderArray['fields'] as $key => $field) {
+
+                $reqKey = $key . 'Required';
+                $field['value'] = $this->input->post->$key;
+                $orderArray['fields'][$key]['value'] = $this->sanitizer->text($field['value']);
+                if($key == 'res_email' && !empty($this->input->post->rs_email)) {
+                    if($this->sanitizer->email($field['value']) == '') {
+                        $orderArray['valid'] = false;
+                        $orderArray['fields'][$key]['error'] = $this->_("Email is not in right format.");
+                    }
+                }
+                if ($this->$reqKey && $orderArray['fields'][$key]['value'] == '') {
+                    $orderArray['valid'] = false;
+                    $orderArray['fields'][$key]['error'] = $orderArray['fields'][$key]['label'] . ' '. $this->_("is a required");
+                }
+                $this->session->set('orderArray', $orderArray);
+            }
+        }
+        if (!isset($this->session->orderArray['valid'])) $this->session->set('orderArray', $orderArray);
+
+        return $orderArray;
+    }
+
+    protected function  ___sendEmail($order) {
+
+        $message = '';
+        $fromEmail = 'mearch.com';
+        $subject = 'Web reservation request';
+
+        $message = "<html><head></head><body>$message</body></html>";
+        $headers = "Content-Type: text/html;";
+
+        if($fromEmail) $headers = "From: $fromEmail\n$headers";
+
+        if (isset($order['fields'])) {
+            $message .= "<h3>Web reservation request</h3>";
+            $message .= "<table border='1'>";
+            foreach ($order['fields'] as $field){
+                $message .= "<tr>";
+                $message .= "<th>" . $field['label'] ."</th>";
+                $message .= "<td>" . $field['value'] ."</td>";
+                $message .= "</tr>";
+            }
+            $message .= "</table>";
+        }
+        mail($order['fields']['res_email']['value'], $subject, $message, $headers);
+    }
 }
+

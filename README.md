@@ -1,3 +1,5 @@
 # Simple reservation module
 
-## Please note this module is on working progress.
+Simple reservation process using ProcessWire
+
+Note: this module still in progress.
